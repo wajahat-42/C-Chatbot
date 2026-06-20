@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Logic Engine — Proof Checker</title>
+  <style>
+    :root {
+      --bg:         #0b0d14;
+      --surface:    #141720;
+      --surface2:   #1c2030;
+      --border:     #252c42;
+      --accent:     #f0c040;
+      --accent-dim: #b89020;
+      --valid:      #34d399;
+      --invalid:    #f87171;
+      --text:       #d4daf0;
+      --muted:      #7a839c;
+      --mono:       'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+      --sans:       'Inter', system-ui, sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--sans);
+      background:  var(--bg);
+      color:       var(--text);
+      min-height:  100vh;
+      padding:     2rem 1rem;
+    }
+
+    header {
+      max-width: 760px;
+      margin:    0 auto 2.5rem;
+      border-left: 3px solid var(--accent);
+      padding-left: 1rem;
+    }
+    header h1 {
+      font-size:      1.6rem;
+      font-weight:    700;
+      letter-spacing: -.02em;
+      color:          var(--accent);
+    }
+    header p {
+      font-size: .875rem;
+      color:     var(--muted);
+      margin-top: .3rem;
+    }
+
+    .card {
+      background:    var(--surface);
+      border:        1px solid var(--border);
+      border-radius: 8px;
+      padding:       1.5rem;
+      max-width:     760px;
+      margin:        0 auto 1.5rem;
+    }
+
+    label {
+      display:     block;
+      font-size:   .78rem;
+      font-weight: 600;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color:       var(--muted);
+      margin-bottom: .4rem;
+    }
+
+    textarea, input[type="text"] {
+      width:         100%;
+      background:    var(--surface2);
+      border:        1px solid var(--border);
+      border-radius: 6px;
+      color:         var(--text);
+      font-family:   var(--mono);
+      font-size:     .9rem;
+      padding:       .65rem .85rem;
+      outline:       none;
+      transition:    border-color .15s;
+      resize:        vertical;
+    }
+    textarea:focus, input:focus { border-color: var(--accent-dim); }
+    textarea { min-height: 110px; }
+
+    .field { margin-bottom: 1rem; }
+
+    .syntax-hint {
+      background:    var(--surface2);
+      border:        1px solid var(--border);
+      border-radius: 6px;
+      padding:       .9rem 1rem;
+      font-family:   var(--mono);
+      font-size:     .78rem;
+      color:         var(--muted);
+      line-height:   1.7;
+      margin-bottom: 1.2rem;
+    }
+    .syntax-hint strong { color: var(--accent); }
+    summary {
+      font-size:   .78rem;
+      font-weight: 600;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color:       var(--muted);
+      cursor:      pointer;
+      margin-bottom: .6rem;
+      user-select: none;
+    }
+    summary:hover { color: var(--text); }
+
+    button {
+      background:    var(--accent);
+      color:         #0b0d14;
+      font-family:   var(--sans);
+      font-size:     .9rem;
+      font-weight:   700;
+      border:        none;
+      border-radius: 6px;
+      padding:       .65rem 1.6rem;
+      cursor:        pointer;
+      transition:    opacity .15s, transform .1s;
+    }
+    button:hover   { opacity: .88; }
+    button:active  { transform: scale(.97); }
+    button:disabled{ opacity: .4; cursor: not-allowed; }
+
+    .btn-row { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
+
+    .examples-btn {
+      background:  transparent;
+      border:      1px solid var(--border);
+      color:       var(--muted);
+      font-size:   .78rem;
+      font-weight: 600;
+      padding:     .45rem 1rem;
+    }
+    .examples-btn:hover { border-color: var(--accent-dim); color: var(--text); }
+
+    #result { display: none; }
+
+    .status-badge {
+      display:       inline-block;
+      padding:       .3rem .9rem;
+      border-radius: 999px;
+      font-size:     .75rem;
+      font-weight:   700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      margin-bottom:  .8rem;
+    }
+    .status-badge.valid   { background: #06301f; color: var(--valid);   border: 1px solid var(--valid);   }
+    .status-badge.invalid { background: #2d0f0f; color: var(--invalid); border: 1px solid var(--invalid); }
+
+    .result-msg {
+      font-size:     .85rem;
+      color:         var(--muted);
+      margin-bottom: 1rem;
+    }
+
+    .table-wrap { overflow-x: auto; }
+    table {
+      width:           100%;
+      border-collapse: collapse;
+      font-size:       .85rem;
+    }
+    thead th {
+      text-align:     left;
+      padding:        .5rem .75rem;
+      font-size:      .7rem;
+      font-weight:    600;
+      letter-spacing: .07em;
+      text-transform: uppercase;
+      color:          var(--muted);
+      border-bottom:  2px solid var(--border);
+    }
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition:    background .12s;
+    }
+    tbody tr:hover { background: var(--surface2); }
+    tbody td       { padding: .55rem .75rem; vertical-align: middle; }
+    td.formula     { font-family: var(--mono); color: var(--text); }
+    td.rule        { font-family: var(--mono); color: var(--accent); font-size: .8rem; font-weight: 600; }
+    td.step-num    { color: var(--muted); font-size: .78rem; min-width: 40px; }
+    td.deps-col    { color: var(--muted); font-size: .8rem; }
+
+    .tr-conclusion { background: #0c2010 !important; border-bottom: 2px solid var(--valid) !important; }
+
+    .error-box {
+      background:    #2d0f0f;
+      border:        1px solid var(--invalid);
+      border-radius: 6px;
+      padding:       .8rem 1rem;
+      font-family:   var(--mono);
+      font-size:     .82rem;
+      color:         var(--invalid);
+      display:       none;
+      margin-top:    1rem;
+      white-space:   pre-wrap;
+    }
+
+    .spinner {
+      width:    18px; height: 18px;
+      border:   2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .6s linear infinite;
+      display: none;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Examples modal */
+    .modal-overlay {
+      display:         none;
+      position:        fixed;
+      inset:           0;
+      background:      rgba(0,0,0,.65);
+      z-index:         100;
+      align-items:     center;
+      justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background:    var(--surface);
+      border:        1px solid var(--border);
+      border-radius: 10px;
+      padding:       1.5rem;
+      max-width:     520px;
+      width:         90%;
+      max-height:    80vh;
+      overflow-y:    auto;
+    }
+    .modal h2 { font-size: 1rem; color: var(--accent); margin-bottom: 1rem; }
+    .example-item {
+      background:    var(--surface2);
+      border:        1px solid var(--border);
+      border-radius: 6px;
+      padding:       .75rem 1rem;
+      margin-bottom: .6rem;
+      cursor:        pointer;
+      transition:    border-color .15s;
+    }
+    .example-item:hover { border-color: var(--accent-dim); }
+    .example-item .rule-tag {
+      display:      inline-block;
+      font-size:    .65rem;
+      font-weight:  700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color:        var(--accent);
+      background:   #1c1800;
+      border:       1px solid var(--accent-dim);
+      border-radius: 4px;
+      padding:      .1rem .45rem;
+      margin-bottom: .35rem;
+    }
+    .example-item .ex-premises {
+      font-family: var(--mono);
+      font-size:   .78rem;
+      color:       var(--text);
+    }
+    .example-item .ex-conc {
+      font-family: var(--mono);
+      font-size:   .78rem;
+      color:       var(--valid);
+      margin-top:  .2rem;
+    }
+    .modal-close {
+      float: right;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-size: .78rem;
+      padding: .3rem .8rem;
+    }
+    .modal-close:hover { color: var(--text); }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>⊢ Logic Engine</h1>
+  <p>Propositional proof checker · 19 rules of inference &amp; replacement · forward-chaining saturation</p>
+</header>
+
+<!-- Input card -->
+<div class="card">
+  <details>
+    <summary>Syntax Reference</summary>
+    <div class="syntax-hint">
+      <strong>Atoms</strong>: lowercase identifiers &nbsp;·&nbsp; p &nbsp; q &nbsp; rain &nbsp; cloudy<br>
+      <strong>Negation</strong>: ~p &nbsp;or&nbsp; !p<br>
+      <strong>Conjunction</strong>: p &amp; q &nbsp;or&nbsp; p /\ q<br>
+      <strong>Disjunction</strong>: p | q &nbsp;or&nbsp; p \/ q<br>
+      <strong>Implication</strong>: p -&gt; q<br>
+      <strong>Biconditional</strong>: p &lt;-&gt; q<br>
+      <strong>Grouping</strong>: (p | q) &amp; r<br><br>
+      <strong>Precedence</strong> (low → high): &lt;-&gt; → -&gt; → | → &amp; → ~ → atoms/( )<br><br>
+      <strong>Example (Modus Ponens):</strong><br>
+      &nbsp;&nbsp;Premises: &nbsp; p -&gt; q<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; p<br>
+      &nbsp;&nbsp;Conclusion: q
+    </div>
+  </details>
+
+  <div class="field">
+    <label>Premises <span style="color:var(--muted);font-weight:400;text-transform:none">(one per line)</span></label>
+    <textarea id="premises" placeholder="p -> q&#10;p"></textarea>
+  </div>
+
+  <div class="field">
+    <label>Conclusion</label>
+    <input type="text" id="conclusion" placeholder="q" />
+  </div>
+
+  <div class="btn-row">
+    <button id="prove-btn" onclick="proveArgument()">▶ Prove Argument</button>
+    <button class="examples-btn" onclick="openExamples()">⊞ Examples</button>
+    <div class="spinner" id="spinner"></div>
+  </div>
+
+  <div class="error-box" id="error-box"></div>
+</div>
+
+<!-- Result card -->
+<div class="card" id="result">
+  <div id="status-badge" class="status-badge"></div>
+  <p class="result-msg" id="result-msg"></p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Formula</th>
+          <th>Rule</th>
+          <th>Depends On</th>
+        </tr>
+      </thead>
+      <tbody id="proof-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Examples modal -->
+<div class="modal-overlay" id="modal-overlay" onclick="maybeCloseModal(event)">
+  <div class="modal">
+    <button class="examples-btn modal-close" onclick="closeExamples()">✕ Close</button>
+    <h2>Example Arguments</h2>
+    <div id="examples-list"></div>
+  </div>
+</div>
+
+<script>
+  const SERVER = 'http://localhost:8080';
+
+  // ── Escape HTML ──────────────────────────────────────────────────────────────
+  function esc(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // ── Loading state ────────────────────────────────────────────────────────────
+  function setLoading(on) {
+    document.getElementById('prove-btn').disabled = on;
+    document.getElementById('spinner').style.display = on ? 'inline-block' : 'none';
+  }
+
+  // ── Error display ────────────────────────────────────────────────────────────
+  function showError(msg) {
+    const box = document.getElementById('error-box');
+    box.textContent = msg;
+    box.style.display = 'block';
+  }
+  function clearError() {
+    document.getElementById('error-box').style.display = 'none';
+  }
+
+  // ── Main proof request ───────────────────────────────────────────────────────
+  async function proveArgument() {
+    clearError();
+    document.getElementById('result').style.display = 'none';
+
+    const premisesRaw   = document.getElementById('premises').value;
+    const conclusionRaw = document.getElementById('conclusion').value.trim();
+
+    const premises = premisesRaw
+      .split('\n')
+      .map(l => l.trim())
+      .filter(l => l.length > 0);
+
+    if (premises.length === 0) { showError('Please enter at least one premise.'); return; }
+    if (!conclusionRaw)        { showError('Please enter a conclusion.'); return; }
+
+    const payload = { premises, conclusion: conclusionRaw, options: { maxIterations: 150 } };
+
+    setLoading(true);
+    try {
+      const res = await fetch(`${SERVER}/prove`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Server returned ${res.status}: ${text}`);
+      }
+      const data = await res.json();
+      if (data.error) { showError(data.error); return; }
+      renderResult(data);
+    } catch (err) {
+      showError(
+        err.message + '\n\n' +
+        'Make sure the C++ server is running:\n' +
+        '  cd backend && cmake -B build && cmake --build build\n' +
+        '  ./build/logic_server'
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // ── Render proof table ───────────────────────────────────────────────────────
+  function renderResult(data) {
+    const badge  = document.getElementById('status-badge');
+    const msg    = document.getElementById('result-msg');
+    const tbody  = document.getElementById('proof-body');
+    const result = document.getElementById('result');
+
+    badge.textContent = data.proved ? '✓ Valid' : '✗ Unprovable';
+    badge.className   = 'status-badge ' + (data.proved ? 'valid' : 'invalid');
+    msg.textContent   = data.message;
+
+    tbody.innerHTML = '';
+    for (const step of data.steps) {
+      const isPremise = step.rule === 'Premise';
+      const deps      = step.deps.length ? step.deps.join(', ') : '—';
+      const tr        = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="step-num">${step.step}</td>
+        <td class="formula">${esc(step.formula)}</td>
+        <td class="rule">${esc(step.rule)}</td>
+        <td class="deps-col">${deps}</td>
+      `;
+      tbody.appendChild(tr);
+    }
+
+    // Highlight conclusion row
+    if (data.proved && tbody.lastElementChild)
+      tbody.lastElementChild.classList.add('tr-conclusion');
+
+    result.style.display = 'block';
+    result.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // Enter key in conclusion field triggers proof
+  document.getElementById('conclusion').addEventListener('keydown', e => {
+    if (e.key === 'Enter') proveArgument();
+  });
+
+  // ── Examples ─────────────────────────────────────────────────────────────────
+  const EXAMPLES = [
+    { rule: 'MP — Modus Ponens',      premises: 'p -> q\np',               conclusion: 'q' },
+    { rule: 'MT — Modus Tollens',     premises: 'p -> q\n~q',              conclusion: '~p' },
+    { rule: 'HS — Hyp. Syllogism',    premises: 'p -> q\nq -> r',          conclusion: 'p -> r' },
+    { rule: 'DS — Disj. Syllogism',   premises: 'p | q\n~p',              conclusion: 'q' },
+    { rule: 'Simp — Simplification',  premises: 'p & q',                   conclusion: 'p' },
+    { rule: 'Conj — Conjunction',     premises: 'p\nq',                    conclusion: 'p & q' },
+    { rule: 'Add — Addition',         premises: 'p',                       conclusion: 'p | q' },
+    { rule: 'CD — Constructive Dil.', premises: '(p -> q) & (r -> s)\np | r', conclusion: 'q | s' },
+    { rule: 'DM — De Morgan\'s',      premises: '~(p & q)',                conclusion: '~p | ~q' },
+    { rule: 'DN — Double Negation',   premises: '~~p',                     conclusion: 'p' },
+    { rule: 'Trans — Transposition',  premises: 'p -> q',                  conclusion: '~q -> ~p' },
+    { rule: 'Impl — Material Impl.',  premises: 'p -> q',                  conclusion: '~p | q' },
+    { rule: 'Exp — Exportation',      premises: '(p & q) -> r',            conclusion: 'p -> (q -> r)' },
+    { rule: 'Equiv — Material Equiv.',premises: 'p <-> q',                 conclusion: '(p -> q) & (q -> p)' },
+    { rule: 'Chained (MP+HS+DM)',     premises: '(p & q) -> r\n~r\np\nq', conclusion: '~(p & q)' },
+  ];
+
+  function openExamples() {
+    const list = document.getElementById('examples-list');
+    list.innerHTML = '';
+    for (const ex of EXAMPLES) {
+      const div = document.createElement('div');
+      div.className = 'example-item';
+      div.innerHTML = `
+        <div class="rule-tag">${esc(ex.rule)}</div>
+        <div class="ex-premises">${esc(ex.premises.replace(/\n/g, '  ·  '))}</div>
+        <div class="ex-conc">∴ ${esc(ex.conclusion)}</div>
+      `;
+      div.onclick = () => { loadExample(ex); closeExamples(); };
+      list.appendChild(div);
+    }
+    document.getElementById('modal-overlay').classList.add('open');
+  }
+
+  function closeExamples() {
+    document.getElementById('modal-overlay').classList.remove('open');
+  }
+
+  function maybeCloseModal(e) {
+    if (e.target === document.getElementById('modal-overlay')) closeExamples();
+  }
+
+  function loadExample(ex) {
+    document.getElementById('premises').value   = ex.premises;
+    document.getElementById('conclusion').value = ex.conclusion;
+    clearError();
+    document.getElementById('result').style.display = 'none';
+  }
+</script>
+</body>
+</html>
